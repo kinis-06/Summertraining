@@ -3,8 +3,9 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 import tushushibie
 import mysql.connector
 from mysql.connector import Error
-from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QFileDialog, QMessageBox
+from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QFileDialog, QMessageBox, QGridLayout
 import os
+import random
 from datetime import datetime, timedelta
 
 class BorrowReturnBookApp(QWidget):
@@ -37,61 +38,77 @@ class BorrowReturnBookApp(QWidget):
             print(f"Error initializing ImageProcessor: {e}")
             sys.exit(1)
 
+        # Load recommended books
+        self.loadRecommendedBooks()
+
     def initUI(self):
-        layout = QVBoxLayout()
+        main_layout = QHBoxLayout()
+
+        left_layout = QVBoxLayout()
+        right_layout = QVBoxLayout()
 
         # File path selection button
         self.select_file_button = QPushButton('选择文件路径')
         self.select_file_button.clicked.connect(self.openFileNameDialog)
-        layout.addWidget(self.select_file_button)
+        left_layout.addWidget(self.select_file_button)
 
         # Image display label
         self.image_label = QLabel(self)
-        self.image_label.setFixedSize(600, 400)  # 设置图片显示标签的固定大小
+        self.image_label.setFixedSize(200, 200)  # 设置图片显示标签的固定大小
         self.image_label.setAlignment(QtCore.Qt.AlignCenter)  # Center align the image
-        layout.addWidget(self.image_label)
+        left_layout.addWidget(self.image_label)
 
         # Recognition button
         self.recognition_button = QPushButton('识别')
         self.recognition_button.clicked.connect(self.recognize)
-        layout.addWidget(self.recognition_button)
+        left_layout.addWidget(self.recognition_button)
 
         # Book ID input
         self.book_id_label = QLabel('书的编号:')
-        layout.addWidget(self.book_id_label)
+        left_layout.addWidget(self.book_id_label)
         self.book_id_input = QLineEdit(self)
-        layout.addWidget(self.book_id_input)
+        left_layout.addWidget(self.book_id_input)
 
         # Book name display
         self.book_name_label = QLabel('书名:')
-        layout.addWidget(self.book_name_label)
+        left_layout.addWidget(self.book_name_label)
         self.book_name_input = QLineEdit(self)
-        layout.addWidget(self.book_name_input)
+        left_layout.addWidget(self.book_name_input)
 
         # Borrow button
         self.borrow_button = QPushButton('借书')
         self.borrow_button.clicked.connect(self.borrowBook)
-        layout.addWidget(self.borrow_button)
+        left_layout.addWidget(self.borrow_button)
 
         # Return button
         self.return_button = QPushButton('还书')
         self.return_button.clicked.connect(self.returnBook)
-        layout.addWidget(self.return_button)
+        left_layout.addWidget(self.return_button)
 
         # Overdue info label
         self.overdue_label = QLabel('逾期信息:')
-        layout.addWidget(self.overdue_label)
+        left_layout.addWidget(self.overdue_label)
 
         # Renew button
         self.renew_button = QPushButton('续借')
         self.renew_button.clicked.connect(self.renewBook)
-        layout.addWidget(self.renew_button)
+        left_layout.addWidget(self.renew_button)
 
-        self.setLayout(layout)
+        main_layout.addLayout(left_layout)
+
+        # Recommended books
+        self.recommendation_label = QLabel('推荐书籍:')
+        right_layout.addWidget(self.recommendation_label)
+        self.recommendation_layout = QVBoxLayout()
+        right_layout.addLayout(self.recommendation_layout)
+
+        main_layout.addLayout(right_layout)
+
+        self.setLayout(main_layout)
         self.setWindowTitle('借还书系统')
 
         # Set window size
-        self.resize(800, 600)
+        self.resize(900, 600)
 
     def openFileNameDialog(self):
         options = QFileDialog.Options()
@@ -182,13 +199,13 @@ class BorrowReturnBookApp(QWidget):
             QMessageBox.warning(self, '警告', '请先识别书籍！')
             return
 
-        book_name = self.getBookNameById(book_id)
-        if not book_name or book_name == "书名未找到":
+        book_info = self.getBookInfoById(book_id)
+        if not book_info or book_info['book_name'] == "书名未找到":
             QMessageBox.warning(self, '警告', '未找到书名，请检查书的编号！')
             return
 
-        self.book_name_input.setText(book_name)
-        print(f"Borrow book ID: {book_id}, Book name: {book_name}")
+        self.book_name_input.setText(book_info['book_name'])
+        print(f"Borrow book ID: {book_id}, Book name: {book_info['book_name']}")
 
         # Get current date and time
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -207,22 +224,22 @@ class BorrowReturnBookApp(QWidget):
                 # Update the br_book_time if the record exists
                 update_query = """
                     UPDATE borrowlist
-                    SET br_book_time = %s
+                    SET br_book_time = %s, book_object = %s
                     WHERE user_id = %s AND user_br_book_id = %s AND back_book_time = %s
                 """
-                cursor.execute(update_query, (current_time, self.user_id, book_id, "未还"))
+                cursor.execute(update_query, (current_time, book_info['object'], self.user_id, book_id, "未还"))
                 self.connection.commit()
                 QMessageBox.information(self, '成功', '续借成功！')
                 print("Borrow record updated.")
             else:
                 # Insert a new borrow record if no existing record is found
                 insert_query = """
-                    INSERT INTO borrowlist (user_br_book_name, user_br_book_id, user_name, user_id, br_book_time, back_book_time)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO borrowlist (user_br_book_name, user_br_book_id, user_name, user_id, br_book_time, back_book_time, book_object)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """
-                cursor.execute(insert_query, (book_name, book_id, self.user_name, self.user_id, current_time, "未还"))
+                cursor.execute(insert_query, (book_info['book_name'], book_id, self.user_name, self.user_id, current_time, "未还", book_info['object']))
                 self.connection.commit()
-                QMessageBox.information(self, '成功', '借书记录已保存！')
+                QMessageBox.information(self, '成功', '借书成功！')
                 print("Borrow record saved.")
         except Error as e:
             print(f"Error saving borrow record: {e}")
@@ -252,7 +269,7 @@ class BorrowReturnBookApp(QWidget):
                 """
                 cursor.execute(update_query, (current_time, self.user_id, book_id, "未还"))
                 self.connection.commit()
-                QMessageBox.information(self, '成功', '还书记录已更新！')
+                QMessageBox.information(self, '成功', '还书成功！')
                 print("Return record updated.")
             else:
                 QMessageBox.warning(self, '警告', '未找到对应的借书记录！')
@@ -302,19 +319,67 @@ class BorrowReturnBookApp(QWidget):
             print(f"Error updating renew record: {e}")
             QMessageBox.critical(self, '错误', '更新自动续期记录时出错！')
 
-    def getBookNameById(self, book_id):
+    def getBookInfoById(self, book_id):
         try:
             cursor = self.connection.cursor()
-            query = "SELECT book_name FROM book_info WHERE book_cm_isbn = %s"
+            query = "SELECT book_name, object FROM book_info WHERE book_cm_isbn = %s"
             cursor.execute(query, (book_id,))
             result = cursor.fetchone()
             if result:
-                return result[0]
+                return {'book_name': result[0], 'object': result[1]}
             else:
-                return "书名未找到"
+                return {'book_name': "书名未找到", 'object': None}
         except Error as e:
             print(f"Error querying book name: {e}")
-            return "查询错误"
+            return {'book_name': "查询错误", 'object': None}
+
+    def loadRecommendedBooks(self):
+        try:
+            cursor = self.connection.cursor()
+            # Query to find the most common book_object for the user
+            query = """
+                SELECT book_object, COUNT(*) as count FROM borrowlist 
+                WHERE user_id = %s 
+                GROUP BY book_object 
+                ORDER BY count DESC 
+                LIMIT 1
+            """
+            cursor.execute(query, (self.user_id,))
+            result = cursor.fetchone()
+
+            if result:
+                most_common_object = result[0]
+
+                # Query to find books with the same object
+                query = """
+                    SELECT book_cm_isbn, book_name, object FROM book_info 
+                    WHERE object = %s
+                """
+                cursor.execute(query, (most_common_object,))
+                books = cursor.fetchall()
+
+                # Randomly select 5 books
+                if books:
+                    recommended_books = random.sample(books, min(5, len(books)))
+                    for book in recommended_books:
+                        book_label = QLabel(f"书名: {book[1]}\n编号: {book[0]}\n类别: {book[2]}")
+                        book_label.setAlignment(QtCore.Qt.AlignCenter)
+                        book_label.setStyleSheet("border: 2px solid black; background-color: white;")
+                        book_label.setFixedSize(300, 100)  # 设置标签大小为正方形
+                        self.recommendation_layout.addWidget(book_label)
+                    print("Recommended books loaded.")
+                else:
+                    no_recommendation_label = QLabel("没有推荐的书籍")
+                    self.recommendation_layout.addWidget(no_recommendation_label)
+                    print("No recommended books found.")
+            else:
+                no_recommendation_label = QLabel("没有推荐的书籍")
+                self.recommendation_layout.addWidget(no_recommendation_label)
+                print("No common book object found.")
+        except Error as e:
+            print(f"Error loading recommended books: {e}")
+            no_recommendation_label = QLabel("推荐书籍加载出错")
+            self.recommendation_layout.addWidget(no_recommendation_label)
 
     def closeEvent(self, event):
         if self.connection.is_connected():
