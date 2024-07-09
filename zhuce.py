@@ -2,10 +2,12 @@ import sys
 from seetaface.api import *
 import mysql.connector
 from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import QLabel, QVBoxLayout, QPushButton, QWidget, QHBoxLayout, QLineEdit
+from PyQt5.QtWidgets import QLabel, QVBoxLayout, QPushButton, QWidget, QHBoxLayout, QLineEdit, QMessageBox
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5 import QtCore
 import subprocess
+import cv2
+import numpy as np
 
 class FaceRecognition:
     def __init__(self, seetaFace):
@@ -14,7 +16,7 @@ class FaceRecognition:
     def capture_face(self, frame):
         detect_result = self.seetaFace.Detect(frame)
         if detect_result.size == 0:
-            print("录入失败,未检测到人脸!!!\n请勿遮挡人脸!!!")
+            self.show_warning("录入失败,未检测到人脸!!!\n请勿遮挡人脸!!!")
             return None
 
         for i in range(detect_result.size):
@@ -27,6 +29,9 @@ class FaceRecognition:
 
     def get_feature_blob(self, feature_np):
         return feature_np.tobytes()
+
+    def show_warning(self, message):
+        QMessageBox.warning(None, '警告', message)
 
 class VideoThread(QtCore.QThread):
     frameCaptured = QtCore.pyqtSignal(np.ndarray)
@@ -86,7 +91,7 @@ class InputForm(QWidget):
         department = self.department_input.text()
 
         if not stu_id or not name or not phone or not department:
-            QtWidgets.QMessageBox.warning(self, '警告', '请填写所有信息')
+            QMessageBox.warning(self, '警告', '请填写所有信息')
             return
 
         self.face_recognition_window = MainWindow(self.seetaFace, stu_id, name, phone, department)

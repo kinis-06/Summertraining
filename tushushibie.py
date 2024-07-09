@@ -3,45 +3,39 @@ import numpy as np
 import os
 
 class ImageProcessor:
-    def __init__(self, folder_path):
-        self.folder_path = folder_path
-        self.file_names = os.listdir(folder_path)
+    def __init__(self, image_path):
+        self.image_path = image_path
 
-    def process_images(self):
-        for file_name in self.file_names:
-            image_path = os.path.join(self.folder_path, file_name)
-            image = cv2.imread(image_path)
-            if image is None:
-                print(f"Failed to load image: {image_path}")
-                continue
+    def process_image(self):
+        image = cv2.imread(self.image_path)
+        if image is None:
+            print(f"Failed to load image: {self.image_path}")
+            return None
 
-            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-            lower_green = np.array([35, 100, 100])
-            upper_green = np.array([85, 255, 255])
-            mask = cv2.inRange(hsv, lower_green, upper_green)
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        lower_green = np.array([35, 100, 100])
+        upper_green = np.array([85, 255, 255])
+        mask = cv2.inRange(hsv, lower_green, upper_green)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            for contour in contours:
-                rect = cv2.minAreaRect(contour)
-                box = cv2.boxPoints(rect)
-                box = np.array(box, dtype=np.int32)
-                cv2.drawContours(image, [box], 0, (0, 255, 0), 2)
-                x, y, w, h = cv2.boundingRect(contour)
-                cropped_image = mask[y:y + h, x:x + w]
+        for contour in contours:
+            rect = cv2.minAreaRect(contour)
+            box = cv2.boxPoints(rect)
+            box = np.array(box, dtype=np.int32)
+            cv2.drawContours(image, [box], 0, (0, 255, 0), 2)
+            x, y, w, h = cv2.boundingRect(contour)
+            cropped_image = mask[y:y + h, x:x + w]
 
-                processor = CroppedImageProcessor()
-                processed_image = processor.process(cropped_image)
-                matched_idS, final_image = processor.detect_and_draw_contours(processed_image)
+            processor = CroppedImageProcessor()
+            processed_image = processor.process(cropped_image)
+            matched_idS, final_image = processor.detect_and_draw_contours(processed_image)
 
+            # self.save_digit_images(final_image, self.image_path)
+            # self.display_image(final_image, f'Final')
 
-                self.save_digit_images(final_image, file_name)
-                self.display_image(final_image, f'Final')
-            print(''.join(matched_idS))
+        return ''.join(matched_idS)
 
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-
-    def save_digit_images(self, image, file_name):
+    def save_digit_images(self, image, image_path):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         contours, _ = cv2.findContours(gray, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
         digit_images = []
@@ -74,14 +68,16 @@ class ImageProcessor:
 
             digit_image = gray[new_y1:new_y2, new_x1:new_x2]
             resized_digit = cv2.resize(digit_image, (40, 30))
-            output_dir = '../moban'
+            output_dir = './moban'
             os.makedirs(output_dir, exist_ok=True)
-            output_path = os.path.join(output_dir, f'{file_name}_{i + 1}.jpg')
+            output_path = os.path.join(output_dir, f'{image_path}_{i + 1}.jpg')
             cv2.imwrite(output_path, resized_digit)
 
     def display_image(self, image, window_name):
         cv2.namedWindow(window_name, cv2.WINDOW_KEEPRATIO)
         cv2.imshow(window_name, image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
 class CroppedImageProcessor:
     def __init__(self):
@@ -150,13 +146,8 @@ class CroppedImageProcessor:
                     for (x, y, w, h) in rectangles:
                         matched_ids.append("/" if template_id == "xg" else template_id)
 
-                cv2.imshow('Contours', draw_img)
-
-                cv2.waitKey(0)
+                # cv2.imshow('Contours', draw_img)
+                # cv2.waitKey(0)
 
         return matched_idS, draw_img
 
-if __name__ == "__main__":
-    folder_path = 'images/'
-    processor = ImageProcessor(folder_path)
-    processor.process_images()

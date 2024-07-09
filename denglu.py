@@ -100,18 +100,41 @@ class CameraApp(QWidget):
                 database="cjc"
             )
             cursor = connection.cursor()
-            query = "SELECT user_name, feature FROM users"
+            query = "SELECT user_id, user_name, feature FROM users"
             cursor.execute(query)
             results = cursor.fetchall()
             for result in results:
-                stored_username = result[0]
-                stored_feature_blob = result[1]
+                stored_user_id = result[0]
+                stored_username = result[1]
+                stored_feature_blob = result[2]
                 stored_feature_np = np.frombuffer(stored_feature_blob, dtype=np.float32)
                 similarity = self.cosine_similarity(stored_feature_np, feature_np)
-                if similarity > 0.6:  # assuming 0.6 as the threshold
+                if similarity > 0.6:
                     QMessageBox.information(self, "登录成功", "欢迎回来, {}".format(stored_username))
                     cursor.close()
                     connection.close()
+                    self.close()
+
+                    # Debug output for the command
+                    print(f"Executing jieshu.py with user_id={stored_user_id} and user_name={stored_username}")
+
+                    try:
+                        # Execute jieshu.py and pass user_id and user_name, capturing output
+                        process = subprocess.Popen(
+                            [sys.executable, "jieshu.py", str(stored_user_id), stored_username],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE
+                        )
+                        stdout, stderr = process.communicate()
+                        if process.returncode != 0:
+                            print(f"Error executing jieshu.py: {stderr.decode()}")
+                        else:
+                            print(f"jieshu.py output: {stdout.decode()}")
+                    except Exception as e:
+                        print(f"Failed to execute jieshu.py: {e}")
+
+
+
                     return
             QMessageBox.warning(self, "登录失败", "查无此人，请先注册")
             cursor.close()
